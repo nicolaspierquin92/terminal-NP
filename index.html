@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>PEA Terminal - Portefeuille Nicolas Pierquin</title>
+<!-- build: v2 -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0c10; --bg-panel: #12141a; --card: #161920; --card-hover: #1c2029;
+    --border: #232833; --accent: #3b82f6; --accent-dim: #1e3a5f;
+    --green: #16c784; --red: #ea3943; --text: #e8eaed; --muted: #6b7280; --muted2: #8b92a3;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .topbar { background: var(--bg-panel); border-bottom: 1px solid var(--border); padding: 14px 28px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 50; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .brand-name { font-weight: 700; font-size: 15px; letter-spacing: 0.5px; }
+  .brand-sub { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-left: 4px; }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  .live-tag { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.5px; }
+  .live-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  .refresh-btn { background: transparent; border: 1px solid var(--border); color: var(--muted2); padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.15s; }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .container { padding: 28px; max-width: 1400px; margin: 0 auto; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .kpi-card { background: var(--bg-panel); padding: 20px 22px; }
+  .kpi-card .label { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  .kpi-card .value { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 600; margin-top: 8px; letter-spacing: -0.5px; }
+  .kpi-card .sub { font-size: 12px; margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+  .kpi-row2 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 32px; }
+  .kpi-row2 .kpi-card .value { font-size: 20px; }
+  .section-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .section-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--muted2); }
+  .section-count { font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .charts-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; margin-bottom: 36px; }
+  .chart-panel { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+  .chart-panel .section-title { margin-bottom: 14px; padding-bottom: 0; border: none; }
+  .chart-wrap { position: relative; height: 260px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 36px; }
+  .asset-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; cursor: pointer; transition: all 0.15s; }
+  .asset-card:hover { background: var(--card-hover); border-color: var(--accent-dim); transform: translateY(-2px); }
+  .asset-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .asset-ticker { font-weight: 700; font-size: 15px; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.5px; }
+  .asset-badge { font-size: 9.5px; padding: 3px 8px; border-radius: 4px; background: var(--accent-dim); color: #93c5fd; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; white-space: nowrap; }
+  .asset-name { font-size: 12px; color: var(--muted2); margin-top: 6px; }
+  .asset-block-title { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); font-weight: 700; margin: 10px 0 6px; }
+  .asset-block-title:first-of-type { margin-top: 10px; }
+  .asset-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+  .asset-row .k { color: var(--muted); }
+  .asset-row .v { font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+  .asset-value-big { font-family: 'JetBrains Mono', monospace; font-size: 19px; font-weight: 600; margin-top: 4px; }
+  .asset-pl { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; font-weight: 600; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+  .arrow-up::before { content: "\25B2 "; font-size: 9px; } .arrow-down::before { content: "\25BC "; font-size: 9px; }
+  .overlay { display: none; position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(5,6,9,0.75); backdrop-filter: blur(3px); align-items: center; justify-content: center; z-index: 999; }
+  .overlay.active { display: flex; }
+  .modal { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 14px; width: 460px; max-width: 90vw; max-height: 85vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
+  .modal-header { padding: 24px 28px; background: var(--card); border-bottom: 1px solid var(--border); position: relative; flex-shrink: 0; }
+  .modal-close { position: absolute; top: 20px; right: 20px; background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1; }
+  .modal-close:hover { color: var(--text); }
+  .modal-ticker { font-size: 26px; font-weight: 700; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.5px; }
+  .modal-name { color: var(--muted2); font-size: 13px; margin-top: 4px; }
+  .modal-type-badge { display: inline-block; background: var(--accent-dim); color: #93c5fd; font-size: 10.5px; padding: 4px 10px; border-radius: 4px; margin-top: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .modal-body { padding: 20px 28px 28px; overflow-y: auto; flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+  .modal-block-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); font-weight: 600; margin: 18px 0 10px; }
+  .modal-block-title:first-of-type { margin-top: 0; }
+  .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-item { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .modal-item .label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .modal-item .value { font-family: 'JetBrains Mono', monospace; font-size: 17px; font-weight: 600; margin-top: 5px; }
+  .modal-full { grid-column: 1 / -1; }
+  .loading { color: var(--muted); padding: 60px 0; text-align: center; font-size: 13px; grid-column: 1/-1; }
+  ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: var(--bg-panel); } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-dot"></div>
+    <div class="brand-name">PEA TERMINAL</div>
+    <div class="brand-sub">Nicolas Pierquin</div>
+  </div>
+  <div class="topbar-right">
+    <div class="live-tag"><div class="live-pulse"></div>LIVE · Google Finance</div>
+    <button class="refresh-btn" onclick="loadAll()">↻ Actualiser</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="kpi-row" id="kpiRow"></div>
+  <div class="kpi-row2" id="kpiRow2"></div>
+
+  <div class="charts-row">
+    <div class="chart-panel">
+      <div class="section-title">Répartition par type d'actif</div>
+      <div class="chart-wrap"><canvas id="allocationChart"></canvas></div>
+    </div>
+    <div class="chart-panel">
+      <div class="section-title">Rendement total par actif (%)</div>
+      <div class="chart-wrap"><canvas id="rendementChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-header">
+    <div class="section-title">Positions actives</div>
+    <div class="section-count mono" id="assetCount">—</div>
+  </div>
+  <div class="grid" id="assetGrid">
+    <div class="loading">Chargement des données...</div>
+  </div>
+
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+      <div class="modal-ticker" id="mTicker"></div>
+      <div class="modal-name" id="mName"></div>
+      <div class="modal-type-badge" id="mType"></div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-block-title">Position</div>
+      <div class="modal-grid">
+        <div class="modal-item"><div class="label">Quantité détenue</div><div class="value" id="mQty"></div></div>
+        <div class="modal-item"><div class="label">PRU (prix moyen)</div><div class="value" id="mPru"></div></div>
+        <div class="modal-item modal-full"><div class="label">Montant investi cumulé</div><div class="value" id="mInvesti"></div></div>
+      </div>
+      <div class="modal-block-title">Marché</div>
+      <div class="modal-grid">
+        <div class="modal-item"><div class="label">Cours actuel</div><div class="value" id="mCours"></div></div>
+        <div class="modal-item"><div class="label">Valeur actuelle</div><div class="value" id="mValeur"></div></div>
+        <div class="modal-item"><div class="label">+/- Latent (€)</div><div class="value" id="mLatentEur"></div></div>
+        <div class="modal-item"><div class="label">+/- Latent (%)</div><div class="value" id="mLatentPct"></div></div>
+      </div>
+      <div class="modal-block-title">Performance globale</div>
+      <div class="modal-grid">
+        <div class="modal-item"><div class="label">Dividendes perçus</div><div class="value" id="mDiv"></div></div>
+        <div class="modal-item"><div class="label">Rendement total (%)</div><div class="value" id="mRendementPct"></div></div>
+        <div class="modal-item modal-full"><div class="label">Statut position</div><div class="value" id="mStatut"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SPREADSHEET_ID = "11d79WTcpue9eiWtq2X0BZg4qyC2jCclBIeTNB0CEg2o";
+
+  // Noms exacts des onglets du Google Sheet (source de vérité unique, comme sur la carte Zenao)
+  const SHEET_PORTEFEUILLE_UNITAIRE = "Portefeuille unitaire";
+  const SHEET_PORTEFEUILLE_GLOBAL = "Portefeuille global";
+  const SHEET_VERSEMENTS = "Versements";
+
+  // Colonnes "Portefeuille unitaire": Ticker,Type,Nom,QtéDétenue,PRU,CoursActuel,ValeurActuelle,LatentEur,LatentPct,Detenue
+  const COL = { ticker:0, type:1, nom:2, qte:3, pru:4, cours:5, valeur:6, latentEur:7, latentPct:8, detenue:9 };
+
+  // Colonnes "Portefeuille global": Ticker,Type,Cours,QtéTotale,PRUmoyen,InvestTotal,ValeurActuelle,PlusValueSansDiv,PlusValuePct,DividendesTotaux,RendementTotalEur,RendementTotalPct,Detenue
+  const COLB = {
+    ticker:0, type:1, cours:2, qte:3, pru:4, investi:5, valeur:6,
+    plusValueSansDiv:7, plusValuePct:8, div:9, rendementEur:10, rendementPct:11, detenue:12
+  };
+
+  let portefeuilleData = [];
+  let bilanMap = {};
+  let versementsInfo = {};
+  let allocationChartInstance = null;
+  let rendementChartInstance = null;
+
+  // Utilise l'API de visualisation Google (gviz), lecture live directe du Sheet, sans clé API.
+  // Le Google Sheet reste l'unique source de vérité : aucune donnée n'est stockée en dur ni en cache.
+  function gvizUrl(sheetName) {
+    return `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+  }
+
+  async function fetchSheet(sheetName) {
+    const res = await fetch(gvizUrl(sheetName));
+    if (!res.ok) throw new Error(`Erreur de lecture du Google Sheet (${sheetName}) : ${res.status}`);
+    const text = await res.text();
+    const jsonStr = text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1);
+    const json = JSON.parse(jsonStr);
+    const rows = json.table.rows || [];
+    return rows.map(r => (r.c || []).map(cell => (cell ? (cell.f !== undefined ? cell.f : cell.v) : "")));
+  }
+
+  function toNum(v) {
+    if (v === undefined || v === null) return 0;
+    let s = String(v).replace(/[€\s]/g, "").replace(",", ".").replace("%", "").trim();
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function isValidRow(row) {
+    return row && row.length > 1 && row[0] !== "#N/A" && row[0] !== "";
+  }
+
+  function fmtEur(n) { return (n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €"; }
+  function fmtPct(n) { return (n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " %"; }
+
+  async function loadAll() {
+    const grid = document.getElementById("assetGrid");
+    grid.innerHTML = '<div class="loading">Chargement des données depuis Google Sheets...</div>';
+
+    try {
+      const [bilanRows, versementRows] = await Promise.all([
+        fetchSheet(SHEET_PORTEFEUILLE_GLOBAL),
+        fetchSheet(SHEET_VERSEMENTS)
+      ]);
+
+      // Une seule carte par actif : source unique = Portefeuille global, filtré sur Détenue = oui
+      portefeuilleData = bilanRows.filter(isValidRow).filter(row => {
+        const statut = String(row[COLB.detenue] || "").trim().toLowerCase();
+        return statut === "oui" || statut === "true";
+      });
+
+      // Plus/moins-value latente : lue directement depuis la feuille Versements (ligne "Plus/moins-value")
+      versementsInfo = {
+        total: toNum(versementRows[0]?.[1]),
+        investi: toNum(versementRows[1]?.[1]),
+        disponible: toNum(versementRows[2]?.[1]),
+        dividende: toNum(versementRows[3]?.[1]),
+        plusMoinsValue: toNum(versementRows[4]?.[1]),
+        postImpot: toNum(versementRows[5]?.[1])
+      };
+
+      renderKpis();
+      renderCharts();
+      renderGrid();
+    } catch (err) {
+      grid.innerHTML = `<div class="loading">Erreur : ${err.message}</div>`;
+    }
+  }
+
+  function renderKpis() {
+    let totalValeur = 0, totalDiv = 0;
+    portefeuilleData.forEach(row => {
+      totalValeur += toNum(row[COLB.valeur]);
+      totalDiv += toNum(row[COLB.div]);
+    });
+
+    // Plus/moins-value latente : lue directement depuis la feuille Versements (source de vérité demandée)
+    const totalLatent = versementsInfo.plusMoinsValue;
+    const totalInvesti = versementsInfo.investi;
+    const latentPctGlobal = totalInvesti ? (totalLatent / totalInvesti) * 100 : 0;
+
+    document.getElementById("kpiRow").innerHTML = `
+      <div class="kpi-card"><div class="label">Valeur totale du portefeuille</div><div class="value">${fmtEur(totalValeur)}</div></div>
+      <div class="kpi-card"><div class="label">Plus / moins-value latente</div><div class="value ${totalLatent >= 0 ? 'pos' : 'neg'}">${fmtEur(totalLatent)}</div><div class="sub ${totalLatent >= 0 ? 'pos' : 'neg'}">${fmtPct(latentPctGlobal)}</div></div>
+      <div class="kpi-card"><div class="label">Dividendes perçus (cumulés)</div><div class="value pos">${fmtEur(totalDiv)}</div></div>
+      <div class="kpi-card"><div class="label">Positions actives</div><div class="value">${portefeuilleData.length}</div></div>
+    `;
+
+    document.getElementById("kpiRow2").innerHTML = `
+      <div class="kpi-card"><div class="label">Total versé sur le PEA</div><div class="value">${fmtEur(versementsInfo.total)}</div></div>
+      <div class="kpi-card"><div class="label">Montant investi</div><div class="value">${fmtEur(versementsInfo.investi)}</div></div>
+      <div class="kpi-card"><div class="label">Liquidité disponible</div><div class="value">${fmtEur(versementsInfo.disponible)}</div></div>
+      <div class="kpi-card"><div class="label">Plus/moins-value nette (post-impôt)</div><div class="value ${versementsInfo.postImpot >= 0 ? 'pos' : 'neg'}">${fmtEur(versementsInfo.postImpot)}</div></div>
+    `;
+  }
+
+  const CHART_COLORS = ["#3b82f6", "#16c784", "#d4af37", "#a855f7", "#ea3943", "#06b6d4", "#f97316", "#84cc16"];
+
+  function renderCharts() { renderAllocationChart(); renderRendementChart(); }
+
+  function renderAllocationChart() {
+    const byType = {};
+    portefeuilleData.forEach(row => {
+      const type = row[COLB.type] || "Autre";
+      byType[type] = (byType[type] || 0) + toNum(row[COLB.valeur]);
+    });
+    const labels = Object.keys(byType);
+    const values = Object.values(byType);
+    const ctx = document.getElementById("allocationChart").getContext("2d");
+    if (allocationChartInstance) allocationChartInstance.destroy();
+    allocationChartInstance = new Chart(ctx, {
+      type: "doughnut",
+      data: { labels, datasets: [{ data: values, backgroundColor: CHART_COLORS, borderColor: "#0a0c10", borderWidth: 2 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: "62%",
+        plugins: {
+          legend: { position: "right", labels: { color: "#8b92a3", font: { size: 11, family: "Inter" }, boxWidth: 10, padding: 12 } },
+          tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${fmtEur(ctx.raw)}` } }
+        }
+      }
+    });
+  }
+
+  function renderRendementChart() {
+    const items = portefeuilleData.map(row => ({
+      ticker: row[COLB.ticker],
+      rendement: toNum(row[COLB.rendementPct])
+    })).sort((a, b) => b.rendement - a.rendement);
+
+    const labels = items.map(i => i.ticker);
+    const values = items.map(i => i.rendement);
+    const colors = values.map(v => v >= 0 ? "#16c784" : "#ea3943");
+
+    const ctx = document.getElementById("rendementChart").getContext("2d");
+    if (rendementChartInstance) rendementChartInstance.destroy();
+    rendementChartInstance = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          backgroundColor: colors,
+          borderColor: "#ffffff",
+          borderWidth: 1.5,
+          borderRadius: 4,
+          barThickness: 18
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: "#8b92a3", font: { size: 11, family: "JetBrains Mono" } }
+          },
+          y: {
+            grid: { color: "#232833" },
+            ticks: { color: "#6b7280", font: { size: 10, family: "JetBrains Mono" }, callback: (v) => v + "%" }
+          }
+        }
+      }
+    });
+  }
+
+  function renderGrid() {
+    const grid = document.getElementById("assetGrid");
+    document.getElementById("assetCount").textContent = portefeuilleData.length + " actif(s)";
+    if (!portefeuilleData.length) { grid.innerHTML = '<div class="loading">Aucune position détenue trouvée.</div>'; return; }
+
+    grid.innerHTML = portefeuilleData.map((row, idx) => {
+      const rendementEur = toNum(row[COLB.rendementEur]);
+      const rendementPct = toNum(row[COLB.rendementPct]);
+      const plClass = rendementEur >= 0 ? "pos" : "neg";
+      const arrowClass = rendementEur >= 0 ? "arrow-up" : "arrow-down";
+      const ticker = row[COLB.ticker];
+
+      return `
+        <div class="asset-card" onclick="openModal(${idx})">
+          <div class="asset-top"><div class="asset-ticker">${ticker}</div><div class="asset-badge">${row[COLB.type]}</div></div>
+          <div class="asset-block-title">Position</div>
+          <div class="asset-row"><span class="k">Quantité totale</span><span class="v">${row[COLB.qte]}</span></div>
+          <div class="asset-row"><span class="k">PRU moyen</span><span class="v">${fmtEur(toNum(row[COLB.pru]))}</span></div>
+          <div class="asset-row"><span class="k">Investissement total</span><span class="v">${fmtEur(toNum(row[COLB.investi]))}</span></div>
+          <div class="asset-block-title">Marché</div>
+          <div class="asset-value-big">${fmtEur(toNum(row[COLB.valeur]))}</div>
+          <div class="asset-pl ${plClass} ${arrowClass}">${fmtEur(rendementEur)} · ${fmtPct(rendementPct)}</div>
+          <div class="asset-block-title">Performance globale</div>
+          <div class="asset-row"><span class="k">Dividendes totaux</span><span class="v">${fmtEur(toNum(row[COLB.div]))}</span></div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function openModal(idx) {
+    const row = portefeuilleData[idx];
+    const ticker = row[COLB.ticker];
+
+    document.getElementById("mTicker").textContent = ticker;
+    document.getElementById("mName").textContent = row[COLB.type];
+    document.getElementById("mType").textContent = row[COLB.type];
+
+    document.getElementById("mQty").textContent = row[COLB.qte];
+    document.getElementById("mPru").textContent = fmtEur(toNum(row[COLB.pru]));
+    document.getElementById("mInvesti").textContent = fmtEur(toNum(row[COLB.investi]));
+    document.getElementById("mCours").textContent = fmtEur(toNum(row[COLB.cours]));
+    document.getElementById("mValeur").textContent = fmtEur(toNum(row[COLB.valeur]));
+
+    const latentEur = toNum(row[COLB.plusValueSansDiv]);
+    const latentPct = toNum(row[COLB.plusValuePct]);
+    const mLatentEur = document.getElementById("mLatentEur");
+    const mLatentPct = document.getElementById("mLatentPct");
+    mLatentEur.textContent = fmtEur(latentEur); mLatentEur.className = "value " + (latentEur >= 0 ? "pos" : "neg");
+    mLatentPct.textContent = fmtPct(latentPct); mLatentPct.className = "value " + (latentPct >= 0 ? "pos" : "neg");
+
+    document.getElementById("mDiv").textContent = fmtEur(toNum(row[COLB.div]));
+    const rendementPct = toNum(row[COLB.rendementPct]);
+    const mRendPct = document.getElementById("mRendementPct");
+    mRendPct.textContent = fmtPct(rendementPct);
+    mRendPct.className = "value " + (rendementPct >= 0 ? "pos" : "neg");
+    document.getElementById("mStatut").textContent = "Position détenue";
+
+    document.getElementById("overlay").classList.add("active");
+  }
+
+  function closeModal() { document.getElementById("overlay").classList.remove("active"); }
+  document.getElementById("overlay").addEventListener("click", (e) => { if (e.target.id === "overlay") closeModal(); });
+
+  loadAll();
+  setInterval(loadAll, 5 * 60 * 1000);
+</script>
+
+</body>
+</html>
