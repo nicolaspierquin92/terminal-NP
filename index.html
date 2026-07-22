@@ -6,6 +6,10 @@
 <!-- build: v2 -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/date-fns@2.30.0/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root {
     --bg: #0a0c10; --bg-panel: #12141a; --card: #161920; --card-hover: #1c2029;
@@ -73,7 +77,23 @@
   .modal-item { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
   .modal-item .label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
   .modal-item .value { font-family: 'JetBrains Mono', monospace; font-size: 17px; font-weight: 600; margin-top: 5px; }
-  .modal-full { grid-column: 1 / -1; }
+.modal-full { grid-column: 1 / -1; }
+  .variation-jour-banner {
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(59,130,246,0.02));
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px; margin-bottom: 4px;
+  }
+  .variation-jour-banner .vj-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); font-weight: 700; }
+  .variation-jour-banner .vj-values { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
+  .variation-jour-banner .vj-pct { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; }
+  .variation-jour-banner .vj-eur { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; opacity: 0.85; }
+  .day-badge {
+    display: inline-block; font-size: 10.5px; font-family: 'JetBrains Mono', monospace; font-weight: 600;
+    padding: 3px 8px; border-radius: 5px; margin-top: 8px;
+  }
+  .day-badge.pos { background: rgba(22,199,132,0.12); color: var(--green); }
+  .day-badge.neg { background: rgba(234,57,67,0.12); color: var(--red); }
   .loading { color: var(--muted); padding: 60px 0; text-align: center; font-size: 13px; grid-column: 1/-1; }
   ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: var(--bg-panel); } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 </style>
@@ -88,6 +108,7 @@
   </div>
   <div class="topbar-right">
     <div class="live-tag"><div class="live-pulse"></div>LIVE · Google Finance</div>
+    <button class="refresh-btn" onclick="exportPdf()">⬇ PDF (suivi annuel)</button>
     <button class="refresh-btn" onclick="loadAll()">↻ Actualiser</button>
   </div>
 </div>
@@ -97,7 +118,7 @@
   <div class="kpi-row" id="kpiRow"></div>
   <div class="kpi-row2" id="kpiRow2"></div>
 
-  <div class="charts-row">
+  <div class="charts-row" style="grid-template-columns: 1fr 1fr 1fr;">
     <div class="chart-panel">
       <div class="section-title">Répartition par type d'actif</div>
       <div class="chart-wrap"><canvas id="allocationChart"></canvas></div>
@@ -106,7 +127,13 @@
       <div class="section-title">Rendement total par actif (%)</div>
       <div class="chart-wrap"><canvas id="rendementChart"></canvas></div>
     </div>
+    <div class="chart-panel">
+      <div class="section-title">Rendement total par actif (€)</div>
+      <div class="chart-wrap"><canvas id="rendementEurChart"></canvas></div>
+    </div>
   </div>
+
+
 
   <div class="section-header">
     <div class="section-title">Positions actives</div>
@@ -127,6 +154,15 @@
       <div class="modal-type-badge" id="mType"></div>
     </div>
     <div class="modal-body">
+      <div class="variation-jour-banner">
+        <div>
+          <div class="vj-label">Variation du jour</div>
+          <div class="vj-values">
+            <div class="vj-pct" id="mVarJourPct">—</div>
+            <div class="vj-eur" id="mVarJourEur">—</div>
+          </div>
+        </div>
+      </div>
       <div class="modal-block-title">Position</div>
       <div class="modal-grid">
         <div class="modal-item"><div class="label">Quantité détenue</div><div class="value" id="mQty"></div></div>
@@ -157,6 +193,7 @@
   const SHEET_PORTEFEUILLE_UNITAIRE = "Portefeuille unitaire";
   const SHEET_PORTEFEUILLE_GLOBAL = "Portefeuille global";
   const SHEET_VERSEMENTS = "Versements";
+  const SHEET_VARIATION_JOUR = "Variation Jour";
 
   // Colonnes "Portefeuille unitaire": Ticker,Type,Nom,QtéDétenue,PRU,CoursActuel,ValeurActuelle,LatentEur,LatentPct,Detenue
   const COL = { ticker:0, type:1, nom:2, qte:3, pru:4, cours:5, valeur:6, latentEur:7, latentPct:8, detenue:9 };
@@ -170,8 +207,10 @@
   let portefeuilleData = [];
   let bilanMap = {};
   let versementsInfo = {};
+  let variationJourMap = {};
   let allocationChartInstance = null;
   let rendementChartInstance = null;
+  let rendementEurChartInstance = null;
 
   // Utilise l'API de visualisation Google (gviz), lecture live directe du Sheet, sans clé API.
   // Le Google Sheet reste l'unique source de vérité : aucune donnée n'est stockée en dur ni en cache.
@@ -208,10 +247,19 @@
     grid.innerHTML = '<div class="loading">Chargement des données depuis Google Sheets...</div>';
 
     try {
-      const [bilanRows, versementRows] = await Promise.all([
+      const [bilanRows, versementRows, variationRows] = await Promise.all([
         fetchSheet(SHEET_PORTEFEUILLE_GLOBAL),
-        fetchSheet(SHEET_VERSEMENTS)
+        fetchSheet(SHEET_VERSEMENTS),
+        fetchSheet(SHEET_VARIATION_JOUR).catch(() => [])
       ]);
+
+      // Variation du jour par ticker (onglet séparé "Variation Jour" : Ticker | % | €)
+      variationJourMap = {};
+      variationRows.slice(1).forEach(row => {
+        const ticker = row[0];
+        if (!ticker) return;
+        variationJourMap[ticker] = { pct: toNum(row[1]), eur: toNum(row[2]) };
+      });
 
       // Une seule carte par actif : source unique = Portefeuille global, filtré sur Détenue = oui
       portefeuilleData = bilanRows.filter(isValidRow).filter(row => {
@@ -266,7 +314,14 @@
 
   const CHART_COLORS = ["#3b82f6", "#16c784", "#d4af37", "#a855f7", "#ea3943", "#06b6d4", "#f97316", "#84cc16"];
 
-  function renderCharts() { renderAllocationChart(); renderRendementChart(); }
+  function renderCharts() { renderAllocationChart(); renderRendementChart(); renderRendementEurChart(); }
+
+  function renderVersementsNote() {
+    const note = document.getElementById("versementsInfoNote");
+    if (!note) return;
+    // Info à titre indicatif uniquement : cumul des versements, non comparable directement aux indices ci-dessus
+    note.textContent = `À titre indicatif — Total versé sur le PEA : ${fmtEur(versementsInfo.total)} (donnée non tracée sur ce graphique, car elle ne reflète pas la performance réelle jour par jour).`;
+  }
 
   function renderAllocationChart() {
     const byType = {};
@@ -333,6 +388,149 @@
     });
   }
 
+  function renderRendementEurChart() {
+    const items = portefeuilleData.map(row => ({
+      ticker: row[COLB.ticker],
+      rendement: toNum(row[COLB.rendementEur])
+    })).sort((a, b) => b.rendement - a.rendement);
+
+    const labels = items.map(i => i.ticker);
+    const values = items.map(i => i.rendement);
+    const colors = values.map(v => v >= 0 ? "#16c784" : "#ea3943");
+
+    const ctx = document.getElementById("rendementEurChart").getContext("2d");
+    if (rendementEurChartInstance) rendementEurChartInstance.destroy();
+    rendementEurChartInstance = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          backgroundColor: colors,
+          borderColor: "#ffffff",
+          borderWidth: 1.5,
+          borderRadius: 4,
+          barThickness: 18
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => ` ${fmtEur(ctx.parsed.y)}` } }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: "#8b92a3", font: { size: 11, family: "JetBrains Mono" } }
+          },
+          y: {
+            grid: { color: "#232833" },
+            ticks: { color: "#6b7280", font: { size: 10, family: "JetBrains Mono" }, callback: (v) => v + " €" }
+          }
+        }
+      }
+    });
+  }
+
+  function exportPdf() {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = "⏳ Génération...";
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const dateStr = new Date().toLocaleDateString("fr-FR");
+      const pageWidth = doc.internal.pageSize.getWidth();
+      let y = 18;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("PEA Terminal — Rapport de suivi", 14, y);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(120);
+      doc.text(`Généré le ${dateStr}`, 14, y + 6);
+      doc.setTextColor(0);
+      y += 16;
+
+      let totalValeur = 0, totalDiv = 0, totalRendementEur = 0;
+      portefeuilleData.forEach(r => {
+        totalValeur += toNum(r[COLB.valeur]);
+        totalDiv += toNum(r[COLB.div]);
+        totalRendementEur += toNum(r[COLB.rendementEur]);
+      });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("Résumé global", 14, y);
+      y += 6;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      const kpiLines = [
+        `Valeur totale du portefeuille : ${fmtEur(totalValeur)}`,
+        `Plus/moins-value latente : ${fmtEur(versementsInfo.plusMoinsValue)}`,
+        `Total versé sur le PEA : ${fmtEur(versementsInfo.total)}`,
+        `Montant investi : ${fmtEur(versementsInfo.investi)}`,
+        `Liquidité disponible : ${fmtEur(versementsInfo.disponible)}`,
+        `Dividendes perçus (cumulés) : ${fmtEur(totalDiv)}`,
+        `Positions actives : ${portefeuilleData.length}`
+      ];
+      kpiLines.forEach(line => { doc.text(line, 14, y); y += 5; });
+      y += 4;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("Détail par actif", 14, y);
+      y += 7;
+
+      const headers = ["Ticker", "Type", "Qté", "PRU", "Investi", "Valeur", "Rend. €", "Rend. %", "Div. €"];
+      const colWidths = [16, 26, 12, 18, 22, 22, 20, 18, 20];
+      const startX = 14;
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      let x = startX;
+      headers.forEach((h, i) => { doc.text(h, x, y); x += colWidths[i]; });
+      y += 2;
+      doc.setLineWidth(0.2);
+      doc.line(startX, y, startX + colWidths.reduce((a, b) => a + b, 0), y);
+      y += 4;
+
+      doc.setFont("helvetica", "normal");
+      portefeuilleData.forEach(row => {
+        if (y > 275) { doc.addPage(); y = 18; }
+        const cells = [
+          String(row[COLB.ticker] || ""),
+          String(row[COLB.type] || "").slice(0, 14),
+          String(row[COLB.qte] || ""),
+          fmtEur(toNum(row[COLB.pru])),
+          fmtEur(toNum(row[COLB.investi])),
+          fmtEur(toNum(row[COLB.valeur])),
+          fmtEur(toNum(row[COLB.rendementEur])),
+          fmtPct(toNum(row[COLB.rendementPct])),
+          fmtEur(toNum(row[COLB.div]))
+        ];
+        x = startX;
+        cells.forEach((c, i) => { doc.text(c, x, y); x += colWidths[i]; });
+        y += 5.5;
+      });
+
+      y += 6;
+      if (y > 270) { doc.addPage(); y = 18; }
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(130);
+      doc.text("Rapport généré automatiquement depuis le PEA Terminal — données issues de Google Sheets.", 14, y);
+
+      const dateFile = new Date().toISOString().slice(0, 10);
+      doc.save(`pea-terminal-suivi-${dateFile}.pdf`);
+    } catch (err) {
+      alert("Erreur export PDF : " + err.message);
+    } finally {
+      btn.textContent = originalText;
+    }
+  }
+
   function renderGrid() {
     const grid = document.getElementById("assetGrid");
     document.getElementById("assetCount").textContent = portefeuilleData.length + " actif(s)";
@@ -345,9 +543,16 @@
       const arrowClass = rendementEur >= 0 ? "arrow-up" : "arrow-down";
       const ticker = row[COLB.ticker];
 
+      const vj = variationJourMap[ticker];
+      const vjHtml = vj ? `
+          <div class="day-badge ${vj.pct >= 0 ? 'pos' : 'neg'}">
+            ${vj.pct >= 0 ? "▲" : "▼"} ${fmtPct(Math.abs(vj.pct))} · ${vj.eur >= 0 ? "+" : ""}${fmtEur(vj.eur)} (jour)
+          </div>` : "";
+
       return `
         <div class="asset-card" onclick="openModal(${idx})">
           <div class="asset-top"><div class="asset-ticker">${ticker}</div><div class="asset-badge">${row[COLB.type]}</div></div>
+          ${vjHtml}
           <div class="asset-block-title">Position</div>
           <div class="asset-row"><span class="k">Quantité totale</span><span class="v">${row[COLB.qte]}</span></div>
           <div class="asset-row"><span class="k">PRU moyen</span><span class="v">${fmtEur(toNum(row[COLB.pru]))}</span></div>
@@ -369,6 +574,16 @@
     document.getElementById("mTicker").textContent = ticker;
     document.getElementById("mName").textContent = row[COLB.type];
     document.getElementById("mType").textContent = row[COLB.type];
+
+    // Variation du jour (onglet séparé "Variation Jour")
+    const vj = variationJourMap[ticker] || { pct: 0, eur: 0 };
+    const vjPctEl = document.getElementById("mVarJourPct");
+    const vjEurEl = document.getElementById("mVarJourEur");
+    const vjArrow = vj.pct >= 0 ? "▲" : "▼";
+    vjPctEl.textContent = `${vjArrow} ${fmtPct(Math.abs(vj.pct))}`;
+    vjPctEl.className = "vj-pct " + (vj.pct >= 0 ? "pos" : "neg");
+    vjEurEl.textContent = `(${vj.eur >= 0 ? "+" : ""}${fmtEur(vj.eur)})`;
+    vjEurEl.className = "vj-eur " + (vj.eur >= 0 ? "pos" : "neg");
 
     document.getElementById("mQty").textContent = row[COLB.qte];
     document.getElementById("mPru").textContent = fmtEur(toNum(row[COLB.pru]));
